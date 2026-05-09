@@ -1,0 +1,47 @@
+.container {
+  padding: 40rpx 30rpx;
+}
+
+.title {
+  font-size: 36rpx;
+  font-weight: bold;
+  text-align: center;
+  margin-bottom: 60rpx;
+}
+
+.form {
+  display: flex;
+  flex-direction: column;
+  align-items: center;
+}
+
+.input {
+  width: 100%;
+  height: 80rpx;
+  border: 1rpx solid #ddd;
+  border-radius: 8rpx;
+  padding: 0 20rpx;
+  font-size: 28rpx;
+  box-sizing: border-box;
+  margin-bottom: 30rpx;
+}
+
+.submit-btn {
+  width: 100%;
+  height: 80rpx;
+  display: flex;
+  align-items: center;
+  justify-content: center;
+  background: #07c160;
+  color: #fff;
+  border-radius: 8rpx;
+  font-size: 30rpx;
+  padding: 0;
+}
+
+.link {
+  text-align: center;
+  margin-top: 40rpx;
+  color: #576b95;
+  font-size: 28rpx;
+}

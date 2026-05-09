@@ -1,0 +1,15 @@
+<view class="container">
+  <view class="title">数据</view>
+  <view class="form">
+    <input
+      class="input"
+      placeholder="请输入内容"
+      value="{{inputContent}}"
+      bindinput="onInput"
+    />
+    <button class="submit-btn" bindtap="submitData">提交</button>
+  </view>
+  <view class="link" bindtap="goToShow">
+    查看已提交数据 →
+  </view>
+</view>

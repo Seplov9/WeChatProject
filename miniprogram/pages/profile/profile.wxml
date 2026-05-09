@@ -1,0 +1,45 @@
+<view class="page">
+  <view class="profile-box" bindtap="onProfileBoxTap">
+    <image wx:if="{{isLogin}}" class="avatar" src="{{avatarUrl}}" mode="aspectFill" />
+    <view wx:else class="avatar default-avatar"></view>
+    <text class="name">{{displayName}}</text>
+  </view>
+
+  <view class="popup-mask" wx:if="{{showLoginPopup}}" bindtap="onHideLoginPopup"></view>
+  <view class="popup {{showLoginPopup ? 'popup-visible' : ''}}">
+    <view class="popup-title">欢迎登录</view>
+
+    <button class="avatar-picker" open-type="chooseAvatar" bindchooseavatar="onChooseAvatar">
+      <image wx:if="{{tempAvatarUrl}}" class="preview-avatar" src="{{tempAvatarUrl}}" mode="aspectFill" />
+      <view wx:else class="preview-avatar preview-placeholder"></view>
+      <text class="avatar-hint">点击获取微信头像</text>
+    </button>
+
+    <view class="nickname-wrap">
+      <input
+        class="nickname-input"
+        type="nickname"
+        placeholder="请输入昵称"
+        value="{{tempNickName}}"
+        bindinput="onNicknameInput"
+      />
+    </view>
+
+    <view class="confirm-btn-wrap" bindtap="onConfirmTap">
+      <button
+        class="confirm-btn {{agreed ? '' : 'confirm-btn-disabled'}}"
+        disabled="{{!agreed}}"
+        bindtap="onConfirmLogin"
+      >完成登录</button>
+    </view>
+
+    <view class="agree-row" bindtap="onToggleAgree">
+      <view class="checkbox-icon {{agreed ? 'checked' : ''}}">
+        <text wx:if="{{agreed}}">✓</text>
+      </view>
+      <text class="agree-text">请您同意</text>
+    </view>
+  </view>
+
+  <view wx:if="{{isLogin}}" class="logout-box" bindtap="onLogout">退出登录</view>
+</view>

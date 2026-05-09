@@ -1,0 +1,13 @@
+<view class="container">
+  <view class="title">数据列表</view>
+  <view wx:if="{{list.length === 0}}" class="empty">暂无数据</view>
+  <view wx:else class="list">
+    <view class="item" wx:for="{{list}}" wx:key="_id">
+      <view class="item-meta">
+        <text class="item-user">用户：{{item.userId}}</text>
+        <text class="item-time">{{item.inputTime}}</text>
+      </view>
+      <view class="item-content">{{item.inputContent}}</view>
+    </view>
+  </view>
+</view>

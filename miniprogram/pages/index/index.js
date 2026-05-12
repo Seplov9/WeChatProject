@@ -1,29 +1,44 @@
 const { regions } = require("../../data/regions");
 
+const MUNICIPALITIES = ["北京", "天津", "上海", "重庆"];
+
+function isMunicipality(province) {
+  return MUNICIPALITIES.includes(province);
+}
+
 function getCities(province) {
+  if (isMunicipality(province)) return ["全部", province];
   const r = regions.find((r) => r.province === province);
-  return r ? r.cities.map((c) => c.city) : ["全部"];
+  const cities = r ? r.cities.map((c) => c.city) : [];
+  return ["全部"].concat(cities);
 }
 
 function getDistricts(province, city) {
   const r = regions.find((r) => r.province === province);
   if (!r) return ["全部"];
+  if (isMunicipality(province) && city === province) {
+    const districts = r.cities.map((c) => c.city);
+    return ["全部"].concat(districts);
+  }
   const c = r.cities.find((c) => c.city === city);
-  return c ? c.districts : ["全部"];
+  const districts = c ? c.districts : [];
+  return ["全部"].concat(districts);
 }
 
 function buildProvinceOptions() {
-  return ["全部城市"].concat(regions.map((r) => r.province));
+  return ["全部"].concat(regions.map((r) => r.province));
 }
 
 Page({
   data: {
     keyword: "",
+    roleIndex: 0,
+    roleOptions: ["身份", "“我可以”", "“我需要”"],
     onlineIndex: 0,
-    onlineOptions: ["全部", "线上", "线下"],
+    onlineOptions: ["线上/线下", "线上", "线下"],
     categoryIndex: 0,
     categoryOptions: [
-      "全部品类",
+      "分类",
       "家政保洁", "家教辅导", "陪同陪诊", "摄影拍摄",
       "代办跑腿", "搬家运输", "其他线下",
       "游戏陪玩", "线上教学", "咨询规划", "设计制作", "其他线上",
@@ -39,30 +54,47 @@ Page({
     favoritedIds: {},
     hasMore: true,
     loadingMore: false,
+    onlineCategories: [
+      "游戏陪玩", "线上教学", "咨询规划", "设计制作", "其他线上",
+    ],
+    offlineCategories: [
+      "家政保洁", "家教辅导", "陪同陪诊", "摄影拍摄",
+      "代办跑腿", "搬家运输", "其他线下",
+    ],
+    allCategoryOptions: [
+      "分类",
+      "家政保洁", "家教辅导", "陪同陪诊", "摄影拍摄",
+      "代办跑腿", "搬家运输", "其他线下",
+      "游戏陪玩", "线上教学", "咨询规划", "设计制作", "其他线上",
+    ],
   },
 
   PAGE_SIZE: 10,
-
-  onlineCategories: [
-    "游戏陪玩", "线上教学", "咨询规划", "设计制作", "其他线上",
-  ],
-  offlineCategories: [
-    "家政保洁", "家教辅导", "陪同陪诊", "摄影拍摄",
-    "代办跑腿", "搬家运输", "其他线下",
-  ],
-  allCategoryOptions: [
-    "全部品类",
-    "家政保洁", "家教辅导", "陪同陪诊", "摄影拍摄",
-    "代办跑腿", "搬家运输", "其他线下",
-    "游戏陪玩", "线上教学", "咨询规划", "设计制作", "其他线上",
-  ],
 
   onShow() {
     if (typeof this.getTabBar === "function" && this.getTabBar()) {
       this.getTabBar().setData({ selected: 0 });
     }
+    this.setData({
+      keyword: "",
+      roleIndex: 0,
+      onlineIndex: 0,
+      categoryOptions: this.data.allCategoryOptions,
+      categoryIndex: 0,
+      provinceIndex: 0,
+      cityOptions: ["全部"],
+      cityIndex: 0,
+      districtOptions: ["全部"],
+      districtIndex: 0,
+    });
     this.fetchFavorites();
     this.fetchOrders(true);
+  },
+
+  onPullDownRefresh() {
+    this.fetchOrders(true).finally(() => {
+      wx.stopPullDownRefresh();
+    });
   },
 
   onReachBottom() {
@@ -97,11 +129,13 @@ Page({
     }
 
     const skip = reset ? 0 : this.data.orders.length;
+    const roleIndex = this.data.roleIndex;
+    const roleFilter = roleIndex === 1 ? "a" : roleIndex === 2 ? "b" : "";
 
-    wx.cloud
+    return wx.cloud
       .callFunction({
         name: "quickstartFunctions",
-        data: { type: "getOrders", skip, pageSize: this.PAGE_SIZE },
+        data: { type: "getOrders", skip, pageSize: this.PAGE_SIZE, roleFilter },
       })
       .then((resp) => {
         wx.hideLoading();
@@ -113,6 +147,9 @@ Page({
           const orders = reset ? newOrders : this.data.orders.concat(newOrders);
           this.setData({ orders, hasMore: resp.result.hasMore, loadingMore: false });
           this.applyFilters();
+        } else {
+          this.setData({ loadingMore: false });
+          wx.showToast({ title: resp.result.errMsg || "加载失败", icon: "none" });
         }
       })
       .catch(() => {
@@ -135,17 +172,19 @@ Page({
     if (this.data.keyword) {
       const kw = this.data.keyword.toLowerCase();
       list = list.filter(
-        (item) => item.title && item.title.toLowerCase().includes(kw)
+        (item) =>
+          (item.title && item.title.toLowerCase().includes(kw)) ||
+          (item.content && item.content.toLowerCase().includes(kw))
       );
     }
 
     if (this.data.onlineIndex === 1) {
       list = list.filter((item) =>
-        this.onlineCategories.includes(item.category)
+        this.data.onlineCategories.includes(item.category)
       );
     } else if (this.data.onlineIndex === 2) {
       list = list.filter(
-        (item) => !this.onlineCategories.includes(item.category)
+        (item) => !this.data.onlineCategories.includes(item.category)
       );
     }
 
@@ -183,9 +222,14 @@ Page({
   },
 
   buildCategoryOptions(onlineIndex) {
-    if (onlineIndex === 0) return this.allCategoryOptions;
-    if (onlineIndex === 1) return ["全部品类"].concat(this.onlineCategories);
-    return ["全部品类"].concat(this.offlineCategories);
+    if (onlineIndex === 0) return this.data.allCategoryOptions;
+    if (onlineIndex === 1) return ["分类"].concat(this.data.onlineCategories);
+    return ["分类"].concat(this.data.offlineCategories);
+  },
+
+  onRoleChange(e) {
+    this.setData({ roleIndex: Number(e.detail.value) });
+    this.fetchOrders(true);
   },
 
   onOnlineChange(e) {
@@ -211,7 +255,7 @@ Page({
   onProvinceChange(e) {
     const idx = Number(e.detail.value);
     const province = this.data.provinceOptions[idx];
-    const cityList = province !== "全部城市" ? getCities(province) : ["全部"];
+    const cityList = idx > 0 ? getCities(province) : ["全部"];
     const districtList = cityList.length > 1 ? getDistricts(province, cityList[1]) : ["全部"];
     this.setData({
       provinceIndex: idx,
@@ -227,7 +271,7 @@ Page({
     const idx = Number(e.detail.value);
     const city = this.data.cityOptions[idx];
     const province = this.data.provinceOptions[this.data.provinceIndex];
-    const districtList = city !== "全部" ? getDistricts(province, city) : ["全部"];
+    const districtList = idx > 0 ? getDistricts(province, city) : ["全部"];
     this.setData({
       cityIndex: idx,
       districtOptions: districtList,
@@ -266,6 +310,7 @@ Page({
           type: "toggleFavorite",
           orderId: item._id,
           orderSnapshot: {
+            role: item.role || "a",
             category: item.category,
             title: item.title,
             content: item.content,
@@ -289,6 +334,7 @@ Page({
         type: "recordHistory",
         orderId: item._id,
         orderSnapshot: {
+          role: item.role || "a",
           category: item.category,
           title: item.title,
           content: item.content,
@@ -300,6 +346,6 @@ Page({
       },
     }).catch(() => {});
 
-    wx.navigateTo({ url: "/pages/show/show?orderId=" + item._id });
+    wx.navigateTo({ url: `/pages/show/show?orderId=${item._id}&role=${item.role || "a"}` });
   },
 });

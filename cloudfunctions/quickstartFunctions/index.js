@@ -139,16 +139,15 @@ const saveUser = async (event) => {
       });
     }
 
-    // 同步更新该用户所有订单中的昵称和头像
-    await db
-      .collection("orders")
-      .where({ publisherId: openid })
-      .update({
-        data: {
-          publisherName: event.nickName,
-          publisherAvatar: event.avatarUrl,
-        },
-      });
+    // 同步更新该用户双表中所有订单的昵称和头像
+    await Promise.all([
+      db.collection("orders_a").where({ publisherId: openid }).update({
+        data: { publisherName: event.nickName, publisherAvatar: event.avatarUrl },
+      }),
+      db.collection("orders_b").where({ publisherId: openid }).update({
+        data: { publisherName: event.nickName, publisherAvatar: event.avatarUrl },
+      }),
+    ]);
 
     return { success: true, openid };
   } catch (e) {
@@ -156,24 +155,33 @@ const saveUser = async (event) => {
   }
 };
 
-// 发布需求
+// 发布信息
 const createOrder = async (event) => {
   const wxContext = cloud.getWXContext();
   const openid = wxContext.OPENID;
+
+  // role: "a"=我需要(甲方), "b"=我可以(乙方)
+  const role = event.role;
+  if (role !== "a" && role !== "b") {
+    return { success: false, errMsg: "请选择身份" };
+  }
 
   if (await checkContent(event.title + " " + event.content, 2, openid)) {
     return { success: false, errMsg: "内容包含不合规信息，请修改后重新发布" };
   }
 
+  const collection = role === "b" ? "orders_b" : "orders_a";
+
   try {
-    await db.createCollection("orders");
+    await db.createCollection(collection);
   } catch (e) {
     // 集合已存在则忽略
   }
 
   try {
-    await db.collection("orders").add({
+    await db.collection(collection).add({
       data: {
+        role,
         publisherId: openid,
         publisherName: event.publisherName || "",
         publisherAvatar: event.publisherAvatar || "",
@@ -200,12 +208,13 @@ const createOrder = async (event) => {
 const cancelOrder = async (event) => {
   const wxContext = cloud.getWXContext();
   const openid = wxContext.OPENID;
+  const collection = event.role === "b" ? "orders_b" : "orders_a";
   try {
-    const order = await db.collection("orders").doc(event.orderId).get();
+    const order = await db.collection(collection).doc(event.orderId).get();
     if (order.data.publisherId !== openid) {
       return { success: false, errMsg: "无权操作" };
     }
-    await db.collection("orders").doc(event.orderId).update({
+    await db.collection(collection).doc(event.orderId).update({
       data: { status: "closed", updatedAt: new Date() },
     });
     return { success: true };
@@ -214,17 +223,18 @@ const cancelOrder = async (event) => {
   }
 };
 
-// 查询单个需求
+// 查询单个信息
 const getOrderById = async (event) => {
+  const collection = event.role === "b" ? "orders_b" : "orders_a";
   try {
-    const result = await db.collection("orders").doc(event.orderId).get();
+    const result = await db.collection(collection).doc(event.orderId).get();
     return { success: true, data: result.data };
   } catch (e) {
     return { success: false, errMsg: e.message };
   }
 };
 
-// 更新需求
+// 更新信息
 const updateOrder = async (event) => {
   const wxContext = cloud.getWXContext();
   const openid = wxContext.OPENID;
@@ -233,12 +243,14 @@ const updateOrder = async (event) => {
     return { success: false, errMsg: "内容包含不合规信息，请修改后重新发布" };
   }
 
+  const collection = event.role === "b" ? "orders_b" : "orders_a";
+
   try {
-    const order = await db.collection("orders").doc(event.orderId).get();
+    const order = await db.collection(collection).doc(event.orderId).get();
     if (order.data.publisherId !== openid) {
       return { success: false, errMsg: "无权修改" };
     }
-    await db.collection("orders").doc(event.orderId).update({
+    await db.collection(collection).doc(event.orderId).update({
       data: {
         category: event.category,
         title: event.title,
@@ -256,52 +268,68 @@ const updateOrder = async (event) => {
   }
 };
 
-// 查询需求池（分页）
+// 查询信息池（分页）
 const getOrders = async (event) => {
   const skip = event.skip || 0;
   const pageSize = event.pageSize || 10;
+  const roleFilter = event.roleFilter; // "a" / "b" / ""
+
+  const collections = roleFilter === "b" ? ["orders_b"] : roleFilter === "a" ? ["orders_a"] : ["orders_a", "orders_b"];
+
   try {
-    const result = await db
-      .collection("orders")
-      .where({ status: "active" })
-      .orderBy("boost", "desc")
-      .orderBy("createdAt", "desc")
-      .skip(skip)
-      .limit(pageSize + 1)
-      .get();
-    const hasMore = result.data.length > pageSize;
-    if (hasMore) result.data.pop();
-    return { success: true, data: result.data, hasMore };
+    const results = await Promise.all(
+      collections.map((col) =>
+        db
+          .collection(col)
+          .where({ status: "active" })
+          .get()
+      )
+    );
+    let data = results.flatMap((r) => r.data);
+    data.sort((a, b) => {
+      const boostDiff = (b.boost || 0) - (a.boost || 0);
+      if (boostDiff !== 0) return boostDiff;
+      return new Date(b.createdAt) - new Date(a.createdAt);
+    });
+    const total = data.length;
+    data = data.slice(skip, skip + pageSize + 1);
+    const hasMore = data.length > pageSize;
+    if (hasMore) data.pop();
+    return { success: true, data, hasMore };
   } catch (e) {
     return { success: false, errMsg: e.message };
   }
 };
 
-// 查询我的发布
+// 查询我的发布（双表）
 const getMyOrders = async () => {
   const wxContext = cloud.getWXContext();
   const openid = wxContext.OPENID;
   try {
-    const result = await db
-      .collection("orders")
-      .where({ publisherId: openid })
-      .orderBy("createdAt", "desc")
-      .get();
-    return { success: true, data: result.data };
+    const [resA, resB] = await Promise.all([
+      db.collection("orders_a").where({ publisherId: openid }).orderBy("createdAt", "desc").get(),
+      db.collection("orders_b").where({ publisherId: openid }).orderBy("createdAt", "desc").get(),
+    ]);
+    const data = [...resA.data, ...resB.data].sort(
+      (a, b) => new Date(b.createdAt) - new Date(a.createdAt)
+    );
+    return { success: true, data };
   } catch (e) {
     return { success: false, errMsg: e.message };
   }
 };
 
-// 查询指定发布者的有效订单
+// 查询指定发布者的有效订单（双表）
 const getPublisherOrders = async (event) => {
   try {
-    const result = await db
-      .collection("orders")
-      .where({ publisherId: event.publisherId, status: "active" })
-      .orderBy("createdAt", "desc")
-      .get();
-    return { success: true, data: result.data };
+    const [resA, resB] = await Promise.all([
+      db.collection("orders_a").where({ publisherId: event.publisherId, status: "active" }).orderBy("createdAt", "desc").get(),
+      db.collection("orders_b").where({ publisherId: event.publisherId, status: "active" }).orderBy("createdAt", "desc").get(),
+    ]);
+    const data = [...resA.data, ...resB.data].sort(
+      (a, b) => new Date(b.createdAt) - new Date(a.createdAt)
+    );
+    return { success: true, data };
   } catch (e) {
     return { success: false, errMsg: e.message };
   }
@@ -337,7 +365,7 @@ const toggleFavorite = async (event) => {
   }
 };
 
-// 获取收藏列表
+// 获取收藏列表（仅返回订单仍存在于 orders_a/orders_b 中的记录）
 const getFavorites = async () => {
   const wxContext = cloud.getWXContext();
   const openid = wxContext.OPENID;
@@ -347,7 +375,15 @@ const getFavorites = async () => {
       .where({ userId: openid })
       .orderBy("createdAt", "desc")
       .get();
-    return { success: true, data: result.data };
+    if (result.data.length === 0) return { success: true, data: [] };
+    const orderIds = [...new Set(result.data.map((f) => f.orderId))];
+    const [aRes, bRes] = await Promise.all([
+      db.collection("orders_a").where({ _id: db.command.in(orderIds) }).get(),
+      db.collection("orders_b").where({ _id: db.command.in(orderIds) }).get(),
+    ]);
+    const existing = new Set([...aRes.data.map((o) => o._id), ...bRes.data.map((o) => o._id)]);
+    const filtered = result.data.filter((f) => existing.has(f.orderId));
+    return { success: true, data: filtered };
   } catch (e) {
     return { success: false, errMsg: e.message };
   }
@@ -383,7 +419,7 @@ const recordHistory = async (event) => {
   }
 };
 
-// 获取浏览历史
+// 获取浏览历史（仅返回订单仍存在于 orders_a/orders_b 中的记录）
 const getHistory = async () => {
   const wxContext = cloud.getWXContext();
   const openid = wxContext.OPENID;
@@ -394,7 +430,15 @@ const getHistory = async () => {
       .orderBy("viewedAt", "desc")
       .limit(50)
       .get();
-    return { success: true, data: result.data };
+    if (result.data.length === 0) return { success: true, data: [] };
+    const orderIds = [...new Set(result.data.map((h) => h.orderId))];
+    const [aRes, bRes] = await Promise.all([
+      db.collection("orders_a").where({ _id: db.command.in(orderIds) }).get(),
+      db.collection("orders_b").where({ _id: db.command.in(orderIds) }).get(),
+    ]);
+    const existing = new Set([...aRes.data.map((o) => o._id), ...bRes.data.map((o) => o._id)]);
+    const filtered = result.data.filter((h) => existing.has(h.orderId));
+    return { success: true, data: filtered };
   } catch (e) {
     return { success: false, errMsg: e.message };
   }

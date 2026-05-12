@@ -1,37 +1,51 @@
 const { regions } = require("../../data/regions");
 
-function getCities(province) {
-  const r = regions.find((r) => r.province === province);
-  return r ? r.cities.map((c) => c.city) : ["全部"];
+// 直辖市列表
+const MUNICIPALITIES = ["北京", "天津", "上海", "重庆"];
+
+function isMunicipality(province) {
+  return MUNICIPALITIES.includes(province);
 }
 
-function getDistricts(province, city) {
+// 发布页用：不含"全部"
+function getCitiesForPost(province) {
   const r = regions.find((r) => r.province === province);
-  if (!r) return ["全部"];
+  if (!r) return [];
+  return r.cities.filter((c) => c.city !== "全部").map((c) => c.city);
+}
+
+// 发布页用：不含"全部"
+function getDistrictsForPost(province, city) {
+  const r = regions.find((r) => r.province === province);
+  if (!r) return [];
   const c = r.cities.find((c) => c.city === city);
-  return c ? c.districts : ["全部"];
+  if (!c) return [];
+  return c.districts.filter((d) => d !== "全部");
 }
 
-function buildProvinceOptions() {
-  return ["全部城市"].concat(regions.map((r) => r.province));
+function buildProvinceOptionsForPost() {
+  return ["省份"].concat(regions.map((r) => r.province));
 }
 
 Page({
   data: {
-    onlineOptions: ["全部", "线上", "线下"],
+    statusBarHeight: 0,
+    roleIndex: 0,
+    roleOptions: ["身份", "“我可以”", "“我需要”"],
+    onlineOptions: ["线上/线下", "线上", "线下"],
     onlineIndex: 0,
     categoryOptions: [
-      "全部品类",
+      "分类",
       "家政保洁", "家教辅导", "陪同陪诊", "摄影拍摄",
       "代办跑腿", "搬家运输", "其他线下",
       "游戏陪玩", "线上教学", "咨询规划", "设计制作", "其他线上",
     ],
     categoryIndex: 0,
-    provinceOptions: buildProvinceOptions(),
+    provinceOptions: buildProvinceOptionsForPost(),
     provinceIndex: 0,
-    cityOptions: ["全部"],
+    cityOptions: ["市/区"],
     cityIndex: 0,
-    districtOptions: ["全部"],
+    districtOptions: ["区"],
     districtIndex: 0,
     title: "",
     content: "",
@@ -39,26 +53,27 @@ Page({
     contact: "",
     images: [],
     editId: "",
+    editRole: "",
+    onlineCategories: [
+      "游戏陪玩", "线上教学", "咨询规划", "设计制作", "其他线上",
+    ],
+    offlineCategories: [
+      "家政保洁", "家教辅导", "陪同陪诊", "摄影拍摄",
+      "代办跑腿", "搬家运输", "其他线下",
+    ],
+    allCategoryOptions: [
+      "分类",
+      "家政保洁", "家教辅导", "陪同陪诊", "摄影拍摄",
+      "代办跑腿", "搬家运输", "其他线下",
+      "游戏陪玩", "线上教学", "咨询规划", "设计制作", "其他线上",
+    ],
   },
 
-  onlineCategories: [
-    "游戏陪玩", "线上教学", "咨询规划", "设计制作", "其他线上",
-  ],
-  offlineCategories: [
-    "家政保洁", "家教辅导", "陪同陪诊", "摄影拍摄",
-    "代办跑腿", "搬家运输", "其他线下",
-  ],
-  allCategoryOptions: [
-    "全部品类",
-    "家政保洁", "家教辅导", "陪同陪诊", "摄影拍摄",
-    "代办跑腿", "搬家运输", "其他线下",
-    "游戏陪玩", "线上教学", "咨询规划", "设计制作", "其他线上",
-  ],
-
   onLoad(options) {
+    this.setData({ statusBarHeight: wx.getSystemInfoSync().statusBarHeight });
     if (options && options.orderId) {
-      this.setData({ editId: options.orderId });
-      this.loadOrder(options.orderId);
+      this.setData({ editId: options.orderId, editRole: options.role || "a" });
+      this.loadOrder(options.orderId, options.role || "a");
     }
   },
 
@@ -69,67 +84,112 @@ Page({
     const app = getApp();
     if (app.globalData.pendingEditId) {
       const id = app.globalData.pendingEditId;
+      const role = app.globalData.pendingEditRole || "a";
       app.globalData.pendingEditId = null;
-      this.setData({ editId: id });
-      this.loadOrder(id);
+      app.globalData.pendingEditRole = null;
+      this._fromCardEdit = true;
+      this.setData({ editId: id, editRole: role });
+      this.loadOrder(id, role);
+    } else if (this._fromCardEdit && this.data.editId) {
+      this._fromCardEdit = false;
+      this.resetForm();
+    } else if (!this.data.editId) {
+      const draft = wx.getStorageSync("postDraft");
+      if (draft) this.restoreDraft(draft);
     }
   },
 
   buildCategoryOptions(onlineIndex) {
-    if (onlineIndex === 0) return this.allCategoryOptions;
-    if (onlineIndex === 1) return ["全部品类"].concat(this.onlineCategories);
-    return ["全部品类"].concat(this.offlineCategories);
+    if (onlineIndex === 0) return this.data.allCategoryOptions;
+    if (onlineIndex === 1) return ["分类"].concat(this.data.onlineCategories);
+    return ["分类"].concat(this.data.offlineCategories);
+  },
+
+  resetForm() {
+    this.setData({
+      editId: "",
+      editRole: "",
+      roleIndex: 0,
+      onlineIndex: 0,
+      categoryOptions: this.data.allCategoryOptions,
+      categoryIndex: 0,
+      provinceIndex: 0,
+      cityOptions: ["市/区"],
+      cityIndex: 0,
+      districtOptions: ["区"],
+      districtIndex: 0,
+      title: "",
+      content: "",
+      reward: "",
+      contact: "",
+      images: [],
+    });
   },
 
   // 解析存储的 city 字段恢复省/市/区选择
   parseCityField(cityStr) {
-    if (!cityStr) return { provIdx: 0, cityIdx: 0, distIdx: 0, cityOpts: ["全部"], distOpts: ["全部"] };
-    // 格式: "省·市·区" 或 "省" 或 "省·市"
+    if (!cityStr) return { provIdx: 0, cityIdx: 0, distIdx: 0, cityOpts: ["市/区"], distOpts: ["区"] };
     const parts = cityStr.split("·");
     const provName = parts[0] || "";
-    const cityName = parts[1] || "";
-    const distName = parts[2] || "";
+    const secondName = parts[1] || "";
+    const thirdName = parts[2] || "";
 
     const provIdx = this.data.provinceOptions.indexOf(provName);
     const pIdx = provIdx >= 0 ? provIdx : 0;
 
-    let cityOpts = ["全部"];
+    let cityOpts = ["市/区"];
     let cityIdx = 0;
-    if (pIdx > 0) {
-      cityOpts = getCities(provName);
-      cityIdx = cityOpts.indexOf(cityName);
-      if (cityIdx < 0) cityIdx = 0;
-    }
-
-    let distOpts = ["全部"];
+    let distOpts = ["区"];
     let distIdx = 0;
-    if (cityIdx > 0) {
-      distOpts = getDistricts(provName, cityName);
-      distIdx = distOpts.indexOf(distName);
-      if (distIdx < 0) distIdx = 0;
+
+    if (pIdx > 0) {
+      if (isMunicipality(provName)) {
+        // 直辖市：下拉5=直辖市名(自动选中)，下拉6=区；cityValue格式"北京·朝阳区"
+        cityOpts = ["市/区", provName];
+        cityIdx = 1;
+        const districts = getCitiesForPost(provName);
+        distOpts = ["区"].concat(districts);
+        distIdx = secondName ? distOpts.indexOf(secondName) : 0;
+        if (distIdx < 0) distIdx = 0;
+      } else {
+        // 普通省：second 是市，third 是区
+        cityOpts = ["市/区"].concat(getCitiesForPost(provName));
+        cityIdx = cityOpts.indexOf(secondName);
+        if (cityIdx < 0) cityIdx = 0;
+        if (cityIdx > 0) {
+          const districts = getDistrictsForPost(provName, secondName);
+          distOpts = districts.length > 0 ? ["区"].concat(districts) : ["区"];
+          distIdx = thirdName ? distOpts.indexOf(thirdName) : 0;
+          if (distIdx < 0) distIdx = 0;
+        }
+      }
     }
 
     return { provIdx: pIdx, cityIdx, distIdx, cityOpts, distOpts };
   },
 
-  loadOrder(orderId) {
+  loadOrder(orderId, role) {
     wx.showLoading({ title: "加载中..." });
     wx.cloud.callFunction({
       name: "quickstartFunctions",
-      data: { type: "getOrderById", orderId },
+      data: { type: "getOrderById", orderId, role: role || "a" },
     }).then((resp) => {
       wx.hideLoading();
       if (resp.result.success) {
         const o = resp.result.data;
+        const r = o.role;
+        const roleIdx = r === "b" ? 1 : r === "a" ? 2 : 0;
+
         let onlineIdx = 0;
-        if (this.onlineCategories.includes(o.category)) onlineIdx = 1;
-        else if (this.offlineCategories.includes(o.category)) onlineIdx = 2;
+        if (this.data.onlineCategories.includes(o.category)) onlineIdx = 1;
+        else if (this.data.offlineCategories.includes(o.category)) onlineIdx = 2;
         const catOpts = this.buildCategoryOptions(onlineIdx);
         const catIdx = catOpts.indexOf(o.category);
 
         const loc = this.parseCityField(o.city || "");
 
         this.setData({
+          roleIndex: roleIdx,
           onlineIndex: onlineIdx,
           categoryOptions: catOpts,
           categoryIndex: catIdx >= 0 ? catIdx : 0,
@@ -151,6 +211,14 @@ Page({
     });
   },
 
+  onBack() {
+    wx.switchTab({ url: "/pages/profile/profile" });
+  },
+
+  onRoleChange(e) {
+    this.setData({ roleIndex: Number(e.detail.value) });
+  },
+
   onOnlineChange(e) {
     const idx = Number(e.detail.value);
     this.setData({
@@ -158,9 +226,9 @@ Page({
       categoryIndex: 0,
       categoryOptions: this.buildCategoryOptions(idx),
       provinceIndex: 0,
-      cityOptions: ["全部"],
+      cityOptions: ["市/区"],
       cityIndex: 0,
-      districtOptions: ["全部"],
+      districtOptions: ["区"],
       districtIndex: 0,
     });
   },
@@ -171,28 +239,62 @@ Page({
 
   onProvinceChange(e) {
     const idx = Number(e.detail.value);
+    if (idx === 0) {
+      this.setData({
+        provinceIndex: 0,
+        cityOptions: ["市/区"],
+        cityIndex: 0,
+        districtOptions: ["区"],
+        districtIndex: 0,
+      });
+      return;
+    }
     const province = this.data.provinceOptions[idx];
-    const cityList = idx > 0 ? getCities(province) : ["全部"];
-    const districtList = cityList.length > 1 ? getDistricts(province, cityList[1]) : ["全部"];
-    this.setData({
-      provinceIndex: idx,
-      cityOptions: cityList,
-      cityIndex: 0,
-      districtOptions: districtList,
-      districtIndex: 0,
-    });
+
+    if (isMunicipality(province)) {
+      // 直辖市：下拉5 = 直辖市名（唯一选项），下拉6 = 区
+      const districts = getCitiesForPost(province);
+      this.setData({
+        provinceIndex: idx,
+        cityOptions: ["市/区", province],
+        cityIndex: 1,
+        districtOptions: ["区"].concat(districts),
+        districtIndex: 0,
+      });
+    } else {
+      // 普通省：下拉5 = 市，下拉6 = 区（待选）
+      const cities = getCitiesForPost(province);
+      this.setData({
+        provinceIndex: idx,
+        cityOptions: ["市/区"].concat(cities),
+        cityIndex: 0,
+        districtOptions: ["区"],
+        districtIndex: 0,
+      });
+    }
   },
 
   onCityChange(e) {
     const idx = Number(e.detail.value);
-    const city = this.data.cityOptions[idx];
     const province = this.data.provinceOptions[this.data.provinceIndex];
-    const districtList = idx > 0 ? getDistricts(province, city) : ["全部"];
-    this.setData({
-      cityIndex: idx,
-      districtOptions: districtList,
-      districtIndex: 0,
-    });
+
+    if (isMunicipality(province)) {
+      // 直辖市：下拉5是直辖市名，区已在下拉4变更时加载
+      this.setData({ cityIndex: idx });
+    } else {
+      // 普通省：下拉5是市，下拉6是该市的区
+      if (idx === 0) {
+        this.setData({ cityIndex: 0, districtOptions: ["区"], districtIndex: 0 });
+        return;
+      }
+      const city = this.data.cityOptions[idx];
+      const districts = getDistrictsForPost(province, city);
+      this.setData({
+        cityIndex: idx,
+        districtOptions: districts.length > 0 ? ["区"].concat(districts) : ["区"],
+        districtIndex: 0,
+      });
+    }
   },
 
   onDistrictChange(e) {
@@ -252,33 +354,19 @@ Page({
     if (!editId) return;
     wx.showModal({
       title: "确认撤销",
-      content: "撤销后该需求将不再显示在信息池中，此操作不可恢复。",
+      content: "撤销后该信息将不再显示在信息池中，此操作不可恢复。",
       success: (res) => {
         if (!res.confirm) return;
         wx.showLoading({ title: "撤销中..." });
         wx.cloud.callFunction({
           name: "quickstartFunctions",
-          data: { type: "cancelOrder", orderId: editId },
+          data: { type: "cancelOrder", orderId: editId, role: this.data.editRole || "a" },
         }).then((resp) => {
           wx.hideLoading();
           if (resp.result.success) {
             wx.showToast({ title: "已撤销" });
-            this.setData({
-              editId: "",
-              onlineIndex: 0,
-              categoryOptions: this.allCategoryOptions,
-              categoryIndex: 0,
-              provinceIndex: 0,
-              cityOptions: ["全部"],
-              cityIndex: 0,
-              districtOptions: ["全部"],
-              districtIndex: 0,
-              title: "",
-              content: "",
-              reward: "",
-              contact: "",
-              images: [],
-            });
+            this._fromCardEdit = false;
+            this.resetForm();
           } else {
             wx.showToast({ title: resp.result.errMsg || "操作失败", icon: "none" });
           }
@@ -290,16 +378,66 @@ Page({
     });
   },
 
+  onSave() {
+    const draft = {
+      roleIndex: this.data.roleIndex,
+      onlineIndex: this.data.onlineIndex,
+      categoryOptions: this.data.categoryOptions,
+      categoryIndex: this.data.categoryIndex,
+      provinceIndex: this.data.provinceIndex,
+      cityOptions: this.data.cityOptions,
+      cityIndex: this.data.cityIndex,
+      districtOptions: this.data.districtOptions,
+      districtIndex: this.data.districtIndex,
+      title: this.data.title,
+      content: this.data.content,
+      reward: this.data.reward,
+      contact: this.data.contact,
+      images: this.data.images,
+    };
+    wx.setStorageSync("postDraft", draft);
+    wx.showToast({ title: "已保存", icon: "success" });
+  },
+
+  onReset() {
+    wx.removeStorageSync("postDraft");
+    this.resetForm();
+  },
+
+  restoreDraft(draft) {
+    this.setData({
+      roleIndex: draft.roleIndex || 0,
+      onlineIndex: draft.onlineIndex || 0,
+      categoryOptions: draft.categoryOptions || this.data.allCategoryOptions,
+      categoryIndex: draft.categoryIndex || 0,
+      provinceIndex: draft.provinceIndex || 0,
+      cityOptions: draft.cityOptions || ["市/区"],
+      cityIndex: draft.cityIndex || 0,
+      districtOptions: draft.districtOptions || ["区"],
+      districtIndex: draft.districtIndex || 0,
+      title: draft.title || "",
+      content: draft.content || "",
+      reward: draft.reward || "",
+      contact: draft.contact || "",
+      images: draft.images || [],
+    });
+  },
+
   submitOrder() {
     const {
+      roleIndex,
       onlineIndex,
       categoryOptions, categoryIndex,
       provinceOptions, provinceIndex,
       cityOptions, cityIndex,
       districtOptions, districtIndex,
-      title, content, reward, contact, images, editId,
+      title, content, reward, contact, images, editId, editRole,
     } = this.data;
 
+    if (roleIndex === 0) {
+      wx.showToast({ title: "请选择身份", icon: "none" });
+      return;
+    }
     if (onlineIndex === 0) {
       wx.showToast({ title: "请选择线上/线下", icon: "none" });
       return;
@@ -316,7 +454,7 @@ Page({
       wx.showToast({ title: "请输入内容", icon: "none" });
       return;
     }
-    if (!reward || Number(reward) <= 0) {
+    if (roleIndex === 2 && (!reward || Number(reward) <= 0)) {
       wx.showToast({ title: "请输入有效薪酬", icon: "none" });
       return;
     }
@@ -325,21 +463,48 @@ Page({
       return;
     }
 
-    // 组合省·市·区（城市可留空）
-    let cityValue = "";
-    if (provinceIndex > 0) {
-      cityValue = provinceOptions[provinceIndex];
-      if (cityIndex > 0) cityValue += "·" + cityOptions[cityIndex];
-      if (districtIndex > 0) cityValue += "·" + districtOptions[districtIndex];
+    // 城市校验
+    if (provinceIndex === 0) {
+      wx.showToast({ title: "请选择省份", icon: "none" });
+      return;
+    }
+    const province = provinceOptions[provinceIndex];
+    if (isMunicipality(province)) {
+      if (districtIndex === 0) {
+        wx.showToast({ title: "请选择区", icon: "none" });
+        return;
+      }
+    } else {
+      if (cityIndex === 0) {
+        wx.showToast({ title: "请选择市", icon: "none" });
+        return;
+      }
+      // 区校验：仅当有实际区数据时要求选择
+      if (districtOptions.length > 1 && districtIndex === 0) {
+        wx.showToast({ title: "请选择区", icon: "none" });
+        return;
+      }
+    }
+
+    // 组合城市字段（直辖市跳过与省份同名的市）
+    let cityValue = province;
+    if (cityIndex > 0 && cityOptions[cityIndex] !== province) {
+      cityValue += "·" + cityOptions[cityIndex];
+    }
+    if (districtIndex > 0) {
+      cityValue += "·" + districtOptions[districtIndex];
     }
 
     const userInfo = wx.getStorageSync("userInfo") || {};
 
+    const role = roleIndex === 1 ? "b" : "a";
+
     const cloudData = {
+      role,
       category: categoryOptions[categoryIndex],
       title: title.trim(),
       content: content.trim(),
-      reward: Number(reward),
+      reward: role === "a" ? Number(reward) : 0,
       contact: contact.trim(),
       city: cityValue,
       images,
@@ -350,6 +515,7 @@ Page({
     if (editId) {
       cloudData.type = "updateOrder";
       cloudData.orderId = editId;
+      cloudData.role = editRole || role;
     } else {
       cloudData.type = "createOrder";
     }
@@ -362,15 +528,18 @@ Page({
       wx.hideLoading();
       if (resp.result.success) {
         wx.showToast({ title: editId ? "已更新" : "发布成功" });
+        this._fromCardEdit = false;
         if (!editId) {
+          wx.removeStorageSync("postDraft");
           this.setData({
+            roleIndex: 0,
             onlineIndex: 0,
-            categoryOptions: this.allCategoryOptions,
+            categoryOptions: this.data.allCategoryOptions,
             categoryIndex: 0,
             provinceIndex: 0,
-            cityOptions: ["全部"],
+            cityOptions: ["市/区"],
             cityIndex: 0,
-            districtOptions: ["全部"],
+            districtOptions: ["区"],
             districtIndex: 0,
             title: "",
             content: "",

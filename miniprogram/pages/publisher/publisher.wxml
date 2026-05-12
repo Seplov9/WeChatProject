@@ -13,7 +13,7 @@
       <image wx:if="{{item.images && item.images.length > 0}}" class="card-image" src="{{item.images[0]}}" mode="aspectFill" />
       <view class="card-top">
         <text class="card-category">{{item.category}}</text>
-        <text class="card-reward">¥{{item.reward}}</text>
+        <text class="card-reward" wx:if="{{item.reward > 0}}">¥{{item.reward}}</text>
       </view>
       <view class="card-title">{{item.title}}</view>
       <view class="card-content">{{item.content}}</view>

@@ -1,3 +1,41 @@
+/* 自定义导航栏 */
+.nav-bar {
+  background: #fff;
+  position: sticky;
+  top: 0;
+  z-index: 100;
+}
+
+.nav-content {
+  height: 44px;
+  display: flex;
+  align-items: center;
+  justify-content: center;
+  position: relative;
+}
+
+.nav-left {
+  position: absolute;
+  left: 16px;
+  top: 0;
+  bottom: 0;
+  display: flex;
+  align-items: center;
+  padding: 0 8px;
+}
+
+.nav-back {
+  font-size: 18px;
+  color: #333;
+  font-weight: 700;
+}
+
+.nav-title {
+  font-size: 17px;
+  font-weight: 500;
+  color: #333;
+}
+
 .page {
   padding: 32rpx 30rpx;
   padding-bottom: calc(100rpx + env(safe-area-inset-bottom) + 40rpx);
@@ -50,7 +88,7 @@
 
 .filter-row {
   display: flex;
-  justify-content: center;
+  justify-content: space-between;
   margin-bottom: 16rpx;
 }
 
@@ -59,32 +97,8 @@
 }
 
 .filter-cell {
+  width: 216rpx;
   flex-shrink: 0;
-  margin-right: 12rpx;
-}
-
-.filter-cell:last-child {
-  margin-right: 0;
-}
-
-.filter-online {
-  width: 110rpx;
-}
-
-.filter-category {
-  width: 200rpx;
-}
-
-.filter-province {
-  width: 160rpx;
-}
-
-.filter-city-l2 {
-  width: 160rpx;
-}
-
-.filter-district {
-  width: 160rpx;
 }
 
 .filter-text {
@@ -176,6 +190,11 @@
   margin-bottom: 0;
 }
 
+.field-full {
+  flex: 1;
+  margin-bottom: 0;
+}
+
 /* 提交区 */
 .submit-area {
   margin-top: 40rpx;
@@ -225,6 +244,72 @@
   justify-content: center;
   padding: 0;
   border: 2rpx solid #ee3f4d;
+}
+
+/* 新建模式三按钮行 */
+.submit-row {
+  display: flex;
+  gap: 12rpx;
+  width: 100%;
+}
+
+.submit-row button {
+  margin: 0;
+  box-sizing: border-box;
+}
+
+.submit-row button::after {
+  border: none;
+}
+
+.publish-btn {
+  width: 50%;
+  flex-shrink: 0;
+  height: 96rpx;
+  background: linear-gradient(135deg, #07c160, #06ad56);
+  color: #fff;
+  font-size: 28rpx;
+  font-weight: 600;
+  border-radius: 48rpx;
+  display: flex;
+  align-items: center;
+  justify-content: center;
+  padding: 0;
+  line-height: normal;
+  box-shadow: 0 8rpx 24rpx rgba(7, 193, 96, 0.3);
+}
+
+.submit-right {
+  width: 50%;
+  flex-shrink: 0;
+  display: flex;
+  gap: 12rpx;
+}
+
+.save-draft-btn,
+.reset-form-btn {
+  flex: 1;
+  min-width: 0;
+  height: 96rpx;
+  background: #fff;
+  font-size: 28rpx;
+  font-weight: 600;
+  border-radius: 48rpx;
+  display: flex;
+  align-items: center;
+  justify-content: center;
+  padding: 0;
+  line-height: normal;
+}
+
+.save-draft-btn {
+  color: #07c160;
+  border: 2rpx solid #07c160;
+}
+
+.reset-form-btn {
+  color: #999;
+  border: 2rpx solid #ddd;
 }
 
 /* 图片上传 */

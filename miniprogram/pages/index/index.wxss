@@ -28,7 +28,7 @@
 
 .filter-row {
   display: flex;
-  justify-content: center;
+  justify-content: space-between;
   margin-bottom: 16rpx;
 }
 
@@ -37,32 +37,8 @@
 }
 
 .filter-cell {
+  width: 216rpx;
   flex-shrink: 0;
-  margin-right: 12rpx;
-}
-
-.filter-cell:last-child {
-  margin-right: 0;
-}
-
-.filter-online {
-  width: 110rpx;
-}
-
-.filter-category {
-  width: 200rpx;
-}
-
-.filter-province {
-  width: 160rpx;
-}
-
-.filter-city-l2 {
-  width: 160rpx;
-}
-
-.filter-district {
-  width: 160rpx;
 }
 
 .filter-text {

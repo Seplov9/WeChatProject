@@ -1,20 +1,37 @@
 Page({
   data: {
     order: null,
+    isFaved: false,
   },
 
   onLoad(options) {
     if (options && options.orderId) {
-      this.loadOrder(options.orderId);
+      this.loadOrder(options.orderId, options.role || "a");
+      this.checkFavorite(options.orderId);
     }
   },
 
-  loadOrder(orderId) {
+  checkFavorite(orderId) {
+    wx.cloud
+      .callFunction({
+        name: "quickstartFunctions",
+        data: { type: "getFavorites" },
+      })
+      .then((resp) => {
+        if (resp.result.success) {
+          const faved = resp.result.data.some((item) => item.orderId === orderId);
+          this.setData({ isFaved: faved });
+        }
+      })
+      .catch(() => {});
+  },
+
+  loadOrder(orderId, role) {
     wx.showLoading({ title: "加载中..." });
     wx.cloud
       .callFunction({
         name: "quickstartFunctions",
-        data: { type: "getOrderById", orderId },
+        data: { type: "getOrderById", orderId, role },
       })
       .then((resp) => {
         wx.hideLoading();
@@ -43,6 +60,34 @@ Page({
     const url = e.currentTarget.dataset.url;
     const urls = this.data.order.images || [];
     wx.previewImage({ current: url, urls });
+  },
+
+  onToggleFav() {
+    const o = this.data.order;
+    if (!o || !o._id) return;
+
+    const newFaved = !this.data.isFaved;
+    this.setData({ isFaved: newFaved });
+
+    wx.cloud
+      .callFunction({
+        name: "quickstartFunctions",
+        data: {
+          type: "toggleFavorite",
+          orderId: o._id,
+          orderSnapshot: {
+            role: o.role || "a",
+            category: o.category,
+            title: o.title,
+            content: o.content,
+            reward: o.reward,
+            contact: o.contact,
+            city: o.city,
+            images: o.images || [],
+          },
+        },
+      })
+      .catch(() => {});
   },
 
   onTapPublisher() {

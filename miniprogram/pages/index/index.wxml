@@ -1,10 +1,15 @@
 <view class="container">
   <view class="search-bar">
-    <input class="search-input" placeholder="搜索需求..." value="{{keyword}}" bindinput="onSearchInput" confirm-type="search" bindconfirm="onSearch" />
+    <input class="search-input" placeholder="搜索信息..." value="{{keyword}}" bindinput="onSearchInput" confirm-type="search" bindconfirm="onSearch" />
   </view>
 
   <view class="filter-area">
     <view class="filter-row">
+      <view class="filter-cell filter-role">
+        <picker mode="selector" range="{{roleOptions}}" bindchange="onRoleChange">
+          <view class="filter-text">{{roleOptions[roleIndex]}} ▾</view>
+        </picker>
+      </view>
       <view class="filter-cell filter-online">
         <picker mode="selector" range="{{onlineOptions}}" bindchange="onOnlineChange">
           <view class="filter-text">{{onlineOptions[onlineIndex]}} ▾</view>
@@ -41,7 +46,7 @@
       <view class="card-top">
         <text class="card-category">{{item.category}}</text>
         <view class="card-top-right">
-          <text class="card-reward">¥{{item.reward}}</text>
+          <text class="card-reward" wx:if="{{item.reward > 0}}">¥{{item.reward}}</text>
           <view class="fav-btn" catchtap="onToggleFav" data-index="{{index}}">
             <text class="fav-star {{item.isFaved ? 'faved' : ''}}">{{item.isFaved ? '★' : '☆'}}</text>
           </view>
@@ -54,7 +59,7 @@
         <text class="card-time">{{item.createdAt}}</text>
       </view>
     </view>
-    <view wx:if="{{filteredOrders.length === 0}}" class="empty">暂无需求</view>
+    <view wx:if="{{filteredOrders.length === 0}}" class="empty">暂无信息</view>
 
     <view class="load-more" wx:if="{{filteredOrders.length > 0}}">
       <view wx:if="{{loadingMore}}" class="load-more-text">加载中...</view>

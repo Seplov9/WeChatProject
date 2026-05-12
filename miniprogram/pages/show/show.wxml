@@ -12,7 +12,12 @@
   <view class="detail-card">
     <view class="detail-category-row">
       <text class="detail-category">{{order.category}}</text>
-      <text class="detail-reward">¥{{order.reward}}</text>
+      <view class="detail-top-right">
+        <text class="detail-reward" wx:if="{{order.reward > 0}}">¥{{order.reward}}</text>
+        <view class="fav-btn" bindtap="onToggleFav">
+          <text class="fav-star {{isFaved ? 'faved' : ''}}">{{isFaved ? '★' : '☆'}}</text>
+        </view>
+      </view>
     </view>
     <view class="detail-title">{{order.title}}</view>
     <view class="detail-content">{{order.content}}</view>

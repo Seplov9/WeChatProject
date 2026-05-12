@@ -33,6 +33,12 @@
   margin-bottom: 20rpx;
 }
 
+.detail-top-right {
+  display: flex;
+  align-items: center;
+  gap: 16rpx;
+}
+
 .detail-category {
   font-size: 22rpx;
   color: #07c160;
@@ -122,4 +128,22 @@
 .detail-value {
   font-size: 28rpx;
   color: #333;
+}
+
+/* 收藏星 */
+.fav-btn {
+  width: 48rpx;
+  height: 48rpx;
+  display: flex;
+  align-items: center;
+  justify-content: center;
+}
+
+.fav-star {
+  font-size: 36rpx;
+  color: #ddd;
+}
+
+.fav-star.faved {
+  color: #f5a623;
 }
